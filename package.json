@@ -1,1 +1,46 @@
-{"name":"grocery-expiry-manager","version":"1.0.0","private":true,"description":"Grocery Expiry Manager","scripts":{"dev":"next dev","build":"next build","start":"next start","lint":"next lint","typecheck":"tsc --noEmit"},"dependencies":{"@capacitor/app":"^6.0.1","@capacitor/cli":"^6.1.2","@capacitor/core":"^6.1.2","@capacitor/local-notifications":"^6.1.1","@capacitor/splash-screen":"^6.0.2","@supabase/supabase-js":"^2.43.0","clsx":"^2.1.1","date-fns":"^3.6.0","dexie":"^4.0.11","dexie-react-hooks":"^1.1.7","lucide-react":"^0.400.0","next":"14.2.5","react":"^18","react-dom":"^18","tailwind-merge":"^2.4.0"},"devDependencies":{"@swc/wasm":"^1.16.2","@types/node":"^20","@types/react":"^18","@types/react-dom":"^18","eslint":"^8","eslint-config-next":"14.2.5","postcss":"^8","tailwindcss":"^3.4.1","tsx":"^4.23.13","typescript":"^5"}}
+{
+  "name": "grocery-expiry-manager",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Grocery Expiry Manager",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "cap:sync": "npm run build && cap sync android",
+    "cap:open": "cap open android",
+    "cap:android": "npm run build && cap sync android && cd android && gradlew.bat assembleDebug"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.2.2",
+    "@capacitor/app": "^6.0.1",
+    "@capacitor/cli": "^6.1.2",
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/local-notifications": "^6.1.1",
+    "@capacitor/splash-screen": "^6.0.2",
+    "@supabase/supabase-js": "^2.43.0",
+    "clsx": "^2.1.1",
+    "date-fns": "^3.6.0",
+    "dexie": "^4.0.11",
+    "dexie-react-hooks": "^1.1.7",
+    "lucide-react": "^0.400.0",
+    "next": "14.2.5",
+    "react": "^18",
+    "react-dom": "^18",
+    "tailwind-merge": "^2.4.0"
+  },
+  "devDependencies": {
+    "@swc/wasm": "^1.16.2",
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.5",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.1",
+    "tsx": "^4.23.13",
+    "typescript": "^5"
+  }
+}
