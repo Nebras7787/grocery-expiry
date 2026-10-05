@@ -42,10 +42,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsOfflineMode(true);
       return;
     }
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
-      setSession(s);
-      setLoading(false);
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data: { session: s } }) => {
+        setSession(s);
+        setLoading(false);
+      })
+      .catch((err) => {
+        // Never leave `loading` stuck true: a rejected getSession (offline,
+        // blocked storage, corrupted token) would blank the whole app behind
+        // AuthGuard's spinner with nothing visible in the console.
+        console.warn('[Auth] getSession failed, continuing offline:', err);
+        setIsOfflineMode(true);
+        setLoading(false);
+      });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
       setLoading(false);

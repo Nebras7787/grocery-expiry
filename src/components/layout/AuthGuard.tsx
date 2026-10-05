@@ -2,7 +2,7 @@
 
 import { useAuth } from '@/lib/auth-context';
 import { useRouter, usePathname } from 'next/navigation';
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 const PUBLIC_PATHS = ['/login', '/register'];
 
@@ -11,6 +11,18 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const isPublic = PUBLIC_PATHS.includes(pathname);
+  const [timedOut, setTimedOut] = useState(false);
+
+  // Safety net: if auth never settles, stop spinning and let the app render
+  // instead of showing a blank page forever.
+  useEffect(() => {
+    if (!loading) {
+      setTimedOut(false);
+      return;
+    }
+    const t = setTimeout(() => setTimedOut(true), 8000);
+    return () => clearTimeout(t);
+  }, [loading]);
 
   useEffect(() => {
     if (loading) return;
@@ -19,7 +31,7 @@ export function AuthGuard({ children }: { children: ReactNode }) {
     }
   }, [loading, user, isOfflineMode, isPublic, router]);
 
-  if (loading) {
+  if (loading && !timedOut) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-8 w-8 border-2 border-emerald-500 border-t-transparent" />
