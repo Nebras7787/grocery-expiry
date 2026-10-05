@@ -6,11 +6,19 @@ import { useEffect, useState, type ReactNode } from 'react';
 
 const PUBLIC_PATHS = ['/login', '/register'];
 
+// next.config.mjs sets `trailingSlash: true`, so usePathname() returns
+// '/login/' rather than '/login'. Normalize before comparing, otherwise public
+// pages are treated as protected and AuthGuard renders null (blank page).
+function isPublicPath(pathname: string): boolean {
+  const normalized = pathname.replace(/\/+$/, '') || '/';
+  return PUBLIC_PATHS.includes(normalized);
+}
+
 export function AuthGuard({ children }: { children: ReactNode }) {
   const { user, loading, isOfflineMode } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const isPublic = PUBLIC_PATHS.includes(pathname);
+  const isPublic = isPublicPath(pathname);
   const [timedOut, setTimedOut] = useState(false);
 
   // Safety net: if auth never settles, stop spinning and let the app render
