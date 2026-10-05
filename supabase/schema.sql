@@ -29,9 +29,13 @@ create table if not exists public.products (
 
 create index if not exists idx_products_user_id on public.products(user_id);
 create index if not exists idx_products_category on public.products(category);
-create index if not exists idx_products_name_trgm on public.products using gin (name gin_trgm_ops);
--- Enable trigram extension for search
+
+-- Enable trigram extension for search.
+-- Must come BEFORE the GIN index below: gin_trgm_ops is provided by pg_trgm,
+-- and Postgres validates the operator class while creating the index.
 create extension if not exists pg_trgm;
+
+create index if not exists idx_products_name_trgm on public.products using gin (name gin_trgm_ops);
 
 comment on table public.products is 'Master list of grocery products';
 comment on column public.products.category is 'Product category for quick filtering';
