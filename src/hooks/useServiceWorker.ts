@@ -1,5 +1,6 @@
 'use client';
 import { useEffect } from 'react';
+import { Capacitor } from '@capacitor/core';
 
 export function useServiceWorker() {
   useEffect(() => {
@@ -15,6 +16,12 @@ export function useServiceWorker() {
         .catch(() => {});
       return;
     }
+
+    // On native (Capacitor) the web assets are already bundled on-device and
+    // served from https://localhost, so the SW is redundant — and registering
+    // it fails inside the WebView ("unknown error occurred when fetching the
+    // script"), which just spams the log. Skip it there.
+    if (Capacitor.isNativePlatform()) return;
 
     navigator.serviceWorker
       .register('/sw.js')
