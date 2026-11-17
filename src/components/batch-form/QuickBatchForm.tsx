@@ -12,6 +12,7 @@ import { getSupabase } from '@/lib/supabase';
 import { toRemotePayload } from '@/lib/sync';
 import { uuid } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-context';
+import { scheduleBatchNotifications } from '@/lib/notifications';
 import { Search, Plus, Calendar, Package, CheckCircle } from 'lucide-react';
 
 export function QuickBatchForm({ onSuccess }: { onSuccess?: () => void }) {
@@ -39,6 +40,7 @@ export function QuickBatchForm({ onSuccess }: { onSuccess?: () => void }) {
       const supabase = getSupabase();
       const userId = user?.id ?? null;
       const owner = scopeFor(userId);
+      const productName = mode === 'new' ? newProductName.trim() : selectedProduct?.name ?? 'منتج';
 
       let productId = selectedProductId;
 
@@ -91,6 +93,11 @@ export function QuickBatchForm({ onSuccess }: { onSuccess?: () => void }) {
       } else {
         await enqueueSync({ table: 'product_batches', operation: 'insert', payload: batch }, owner);
       }
+
+      // Arm the OS reminders (90/30/7/1/0 days before expiry) and fire an
+      // immediate alert when the batch is already inside the 90-day window.
+      // `force` guarantees the alert on add even if the sweep ran moments ago.
+      void scheduleBatchNotifications({ id: batch.id, productName, expiryDate }, { force: true });
 
       setQuantity(1);
       setSearch('');

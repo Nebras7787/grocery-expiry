@@ -1,6 +1,10 @@
-import { addDays, format } from 'date-fns';
+import { addDays, format, subDays } from 'date-fns';
 import type { BatchStatus } from './database.types';
-import { daysUntil } from './i18n';
+import { daysUntil, parseDateOnly } from './i18n';
+
+// A batch counts as "near expiry" (and the early warning fires) starting
+// three months before its expiry date.
+export const NEAR_EXPIRY_DAYS = 90;
 
 export function computeStatus(expiryDate: string | Date): BatchStatus {
   const diff =
@@ -8,8 +12,33 @@ export function computeStatus(expiryDate: string | Date): BatchStatus {
       ? daysUntil(expiryDate)
       : daysUntil(format(expiryDate, 'yyyy-MM-dd'));
   if (diff < 0) return 'expired';
-  if (diff <= 30) return 'near_expiry';
+  if (diff <= NEAR_EXPIRY_DAYS) return 'near_expiry';
   return 'valid';
+}
+
+// Every reminder the OS should fire for a batch, counted back from its expiry
+// date. Multiple milestones mean the user still gets alerted even if the app is
+// never opened after the batch is added.
+export const REMINDER_DAYS = [90, 30, 7, 1, 0] as const;
+
+// The moment the early warning should fire: 90 days before expiry, at 09:00
+// local time. Returned as a Date so it can be handed straight to the OS
+// scheduler (LocalNotifications) and still fire while the app is closed.
+export function notificationDate(expiryDate: string | Date): Date {
+  const base = typeof expiryDate === 'string' ? parseDateOnly(expiryDate) : new Date(expiryDate);
+  const at = subDays(base, NEAR_EXPIRY_DAYS);
+  at.setHours(9, 0, 0, 0);
+  return at;
+}
+
+// All reminder instants for a batch (90/30/7/1/0 days before expiry, 09:00).
+export function reminderDates(expiryDate: string | Date): { days: number; at: Date }[] {
+  const base = typeof expiryDate === 'string' ? parseDateOnly(expiryDate) : new Date(expiryDate);
+  return REMINDER_DAYS.map((days) => {
+    const at = subDays(base, days);
+    at.setHours(9, 0, 0, 0);
+    return { days, at };
+  });
 }
 
 export function daysUntilExpiry(expiryDate: string | Date): number {

@@ -8,11 +8,12 @@ import { expiryBorderColor } from '@/lib/expiry';
 import { categoryLabel, describeDaysLeft, formatDate } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import { Trash2 } from 'lucide-react';
-import { getDB, enqueueSync, scopeFor } from '@/lib/dexie';
-import { getSupabase } from '@/lib/supabase';
+import { getDB, scopeFor } from '@/lib/dexie';
+import { queueDelete } from '@/lib/sync';
 import { useAuth } from '@/lib/auth-context';
 import { daysUntilExpiry } from '@/lib/expiry';
 import { DemoDataCard } from '@/components/demo/DemoDataCard';
+import { cancelBatchNotification } from '@/lib/notifications';
 
 export default function BatchesPage() {
   const { batches } = useBatches();
@@ -30,14 +31,9 @@ export default function BatchesPage() {
   const handleDelete = async (id: string) => {
     const db = getDB();
     await db.batches.delete(id);
-    const supabase = getSupabase();
-    const owner = scopeFor(user?.id);
-    if (supabase && navigator.onLine && user) {
-      const { error } = await supabase.from('product_batches').delete().eq('id', id);
-      if (error) await enqueueSync({ table: 'product_batches', operation: 'delete', payload: {}, recordId: id }, owner);
-    } else {
-      await enqueueSync({ table: 'product_batches', operation: 'delete', payload: {}, recordId: id }, owner);
-    }
+    await cancelBatchNotification(id);
+    // Queue first so the delete is retried until the server confirms it.
+    await queueDelete('product_batches', id, scopeFor(user?.id));
   };
 
   return (
@@ -59,7 +55,7 @@ export default function BatchesPage() {
               <Select value={filter} onChange={(e) => setFilter(e.target.value as never)}>
                 <option value="all">كل الحالات</option>
                 <option value="valid">صالح</option>
-                <option value="near_expiry">قارب على الانتهاء (≤ ٣٠ يوماً)</option>
+                <option value="near_expiry">قارب على الانتهاء (≤ ٩٠ يوماً)</option>
                 <option value="expired">منتهي</option>
               </Select>
             </CardContent>

@@ -16,6 +16,8 @@ export function getSupabase(): SupabaseClient | null {
   if (!client) {
     client = createClient(url, anon, {
       auth: {
+        // Persist the session so a logged-in user keeps working offline and is
+        // not asked for a password every time the app is reopened.
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: true,

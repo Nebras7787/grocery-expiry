@@ -8,7 +8,7 @@ import { useState } from 'react';
 
 export function Header() {
   const { isOnline, pending, manualSync } = useOfflineSync();
-  const { user, signOut, isOfflineMode } = useAuth();
+  const { user, signOut } = useAuth();
   const [showUser, setShowUser] = useState(false);
 
   return (
@@ -55,19 +55,12 @@ export function Header() {
               {showUser && (
                 <div className="absolute left-0 top-full mt-2 w-56 bg-white border rounded-xl shadow-lg p-3 space-y-2 z-50">
                   <div className="text-xs text-slate-500 truncate">{user.email}</div>
-                  <div className="text-[10px] text-slate-400">
-                    {isOfflineMode ? UI.offlineMode : `ID: ${user.id.slice(0, 8)}...`}
-                  </div>
+                  <div className="text-[10px] text-slate-400">ID: {user.id.slice(0, 8)}...</div>
                   <Button variant="ghost" size="sm" className="w-full justify-start" onClick={signOut}>
                     <LogOut className="w-4 h-4 ms-2" /> {UI.signOut}
                   </Button>
                 </div>
               )}
-            </div>
-          )}
-          {isOfflineMode && !user && (
-            <div className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium border bg-slate-50 border-slate-200 text-slate-600">
-              <WifiOff className="w-3.5 h-3.5" /> {UI.offlineMode}
             </div>
           )}
         </div>

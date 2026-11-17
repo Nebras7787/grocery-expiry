@@ -1,31 +1,88 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { requestNotificationPermission, scheduleExpiryNotifications } from '@/lib/notifications';
+import {
+  getNotificationDiagnostics,
+  openExactAlarmSettings,
+  requestNotificationPermission,
+  scheduleAllBatchNotifications,
+  scheduleExpiryNotifications,
+  type NotificationDiagnostics,
+} from '@/lib/notifications';
 import { useBatches } from '@/hooks/useLiveData';
-import { daysUntilExpiry } from '@/lib/expiry';
+import { daysUntilExpiry, NEAR_EXPIRY_DAYS } from '@/lib/expiry';
 import { describeDaysLeft, formatDate } from '@/lib/i18n';
 
 const PERM_LABELS: Record<string, string> = {
   granted: 'مسموح',
   denied: 'مرفوض',
+  prompt: 'غير محدد',
+  'prompt-with-rationale': 'غير محدد',
   default: 'غير محدد',
   unknown: 'غير معروف',
 };
 
 export default function NotificationsPage() {
   const { batches } = useBatches();
-  const [perm, setPerm] = useState<string>('unknown');
+  const [diag, setDiag] = useState<NotificationDiagnostics | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+
+  const refreshDiag = useCallback(async () => {
+    setDiag(await getNotificationDiagnostics());
+  }, []);
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && 'Notification' in window) setPerm(Notification.permission);
-  }, []);
+    void refreshDiag();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void refreshDiag();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [refreshDiag]);
 
   const expiring = batches
     .map((b) => ({ id: b.id, productName: b.product_name, expiryDate: b.expiry_date, daysLeft: daysUntilExpiry(b.expiry_date) }))
-    .filter((x) => x.daysLeft <= 14)
+    .filter((x) => x.daysLeft <= NEAR_EXPIRY_DAYS)
     .sort((a, b) => a.daysLeft - b.daysLeft);
+
+  const handleGrant = async () => {
+    setBusy(true);
+    try {
+      const ok = await requestNotificationPermission();
+      setMessage(ok ? 'تم منح إذن الإشعارات.' : 'لم يُمنح الإذن — فعّله من إعدادات التطبيق.');
+      await refreshDiag();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleExactAlarm = async () => {
+    await openExactAlarmSettings();
+    setMessage('افتح «المنبّهات والتذكيرات» واسمح للتطبيق، ثم عُد إلى هنا.');
+  };
+
+  const handleReschedule = async () => {
+    setBusy(true);
+    try {
+      const { batches: count, pending } = await scheduleAllBatchNotifications();
+      setMessage(`أُعيد تجهيز تنبيهات ${count} دفعة — ${pending} إشعار مجدول على الجهاز.`);
+      await refreshDiag();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleTest = async () => {
+    setBusy(true);
+    try {
+      await scheduleExpiryNotifications(expiring);
+      setMessage('سيظهر تنبيه تجريبي خلال ثوانٍ. يمكنك إغلاق التطبيق للتأكد.');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <main className="space-y-4 max-w-2xl">
@@ -33,36 +90,62 @@ export default function NotificationsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">إشعارات الجهاز</CardTitle>
+          <CardTitle className="text-base">حالة إشعارات الجهاز</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-slate-600">
-            على الجوال (Capacitor) تُجدوَل الإشعارات محلياً. على الويب تُستخدم إشعارات المتصفح.
-            كما توجد دالة Supabase_edge تعمل يومياً لتحديد المنتجات قريبة الانتهاء وإرسال التنبيهات.
+            على الجوال تُجدوَل التذكيرات على مستوى نظام أندرويد في <b>٩٠ و٣٠ و٧ و١ و٠ يوم</b> قبل الانتهاء الساعة ٩:٠٠
+            صباحاً، وتعمل حتى لو كان التطبيق مغلقاً. تُضاف أيضاً <b>دفعة فورية</b> عند تسجيل منتج قارب على الانتهاء.
           </p>
-          <div className="flex items-center gap-2 text-sm flex-wrap">
-            <span className="text-slate-500">الإذن:</span>
-            <span className="font-medium">{PERM_LABELS[perm] ?? perm}</span>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={async () => {
-                const ok = await requestNotificationPermission();
-                setPerm(ok ? 'granted' : 'denied');
-              }}
-            >
-              طلب الإذن
+
+          <div className="grid gap-2 text-sm">
+            <div className="flex items-center justify-between gap-3 p-2 rounded-lg bg-slate-50">
+              <span className="text-slate-600">إذن الإشعارات</span>
+              <span className="font-medium">
+                {diag ? PERM_LABELS[diag.display] ?? diag.display : '…'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-3 p-2 rounded-lg bg-slate-50">
+              <span className="text-slate-600">المنبّهات الدقيقة (Alarms &amp; reminders)</span>
+              <span className={`font-medium ${diag?.exactAlarm === 'denied' ? 'text-amber-600' : ''}`}>
+                {diag?.exactAlarm === 'granted' ? 'مسموحة' : diag?.exactAlarm === 'denied' ? 'غير مسموحة' : 'غير معروف'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-3 p-2 rounded-lg bg-slate-50">
+              <span className="text-slate-600">إشعارات مجدولة حالياً</span>
+              <span className="font-medium">{diag?.pending ?? 0}</span>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={handleGrant} disabled={busy}>
+              طلب إذن الإشعارات
+            </Button>
+            <Button size="sm" variant="outline" onClick={handleExactAlarm} disabled={busy}>
+              السماح بالمنبّهات الدقيقة
+            </Button>
+            <Button size="sm" variant="outline" onClick={handleReschedule} disabled={busy}>
+              إعادة جدولة كل التنبيهات
+            </Button>
+            <Button size="sm" variant="outline" onClick={handleTest} disabled={busy || expiring.length === 0}>
+              تنبيه تجريبي الآن
             </Button>
           </div>
-          <Button onClick={() => scheduleExpiryNotifications(expiring)} disabled={expiring.length === 0}>
-            تجربة الآن ({expiring.length} تنتهي خلال ١٤ يوماً)
-          </Button>
+
+          {message && <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-2">{message}</p>}
+
+          <div className="text-xs text-slate-600 bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-1">
+            <p className="font-medium text-amber-800">لضمان وصول الإشعارات والتطبيق مغلق:</p>
+            <p>• اسمح بـ«المنبّهات والتذكيرات» من الزر أعلاه (Android 12+).</p>
+            <p>• من إعدادات النظام للتطبيق، اضبط البطارية على <b>غير مقيّد (Unrestricted)</b>.</p>
+            <p>• لا تستخدم «إيقاف قسري» من إعدادات التطبيق؛ فهو يلغي كل التنبيهات المجدولة.</p>
+          </div>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">تنتهي خلال ١٤ يوماً</CardTitle>
+          <CardTitle className="text-base">تنتهي خلال ٩٠ يوماً</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
           {expiring.length === 0 ? (
@@ -87,21 +170,17 @@ export default function NotificationsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">المجدولة اليومية على الخادم</CardTitle>
+          <CardTitle className="text-base">مزامنة لحظية بين الأجهزة</CardTitle>
         </CardHeader>
-        <CardContent className="text-xs bg-slate-50 p-3 rounded-lg overflow-auto">
-          <pre className="whitespace-pre-wrap font-mono text-slate-700" dir="ltr">
-{`-- pg_cron (if enabled)
-SELECT cron.schedule('refresh-batch-status-daily', '0 2 * * *', $$
-  SELECT public.refresh_batch_statuses();
-$$);
-
--- Edge Function deploy:
-supabase functions deploy check-expiry --no-verify-jwt
-supabase functions schedule check-expiry --cron "0 8 * * *"
-`}
-          </pre>
-          <p className="mt-2 text-slate-600">ملف الدالة: <code dir="ltr">supabase/functions/check-expiry/index.ts</code></p>
+        <CardContent className="text-sm text-slate-600 space-y-2">
+          <p>
+            أثناء فتح التطبيق، تُسحب التغييرات من الأجهزة الأخرى لحظياً عبر Supabase Realtime، ويُصدر تنبيه لأي دفعة جديدة
+            قاربت على الانتهاء. الحذف ينتقل للجهاز الآخر بعد لحظات.
+          </p>
+          <p className="text-xs text-slate-500">
+            ملاحظة: وصول إشعار فوري على جهاز <b>مغلق تماماً</b> عند الإضافة من جهاز آخر يحتاج إشعارات FCM من الخادم
+            (غير مفعّلة حالياً). التذكيرات المجدولة على الجهاز نفسه تعمل وهو مغلق.
+          </p>
         </CardContent>
       </Card>
     </main>

@@ -63,7 +63,7 @@ create index if not exists idx_batches_user_id on public.product_batches(user_id
 create index if not exists idx_batches_expiry_status on public.product_batches(expiry_date, status);
 
 comment on table public.product_batches is 'Inventory batches with expiry tracking';
-comment on column public.product_batches.status is 'Computed: valid (>30d), near_expiry (<=30d & >=0), expired (<0)';
+comment on column public.product_batches.status is 'Computed: valid (>90d), near_expiry (<=90d & >=0), expired (<0)';
 comment on column public.product_batches.is_notified is 'Whether expiry notification was sent';
 
 -- -------------------------------------------------
@@ -75,7 +75,7 @@ language plpgsql immutable as $$
 begin
   if expiry < current_date then
     return 'expired'::batch_status;
-  elsif expiry <= current_date + interval '30 days' then
+  elsif expiry <= current_date + interval '90 days' then
     return 'near_expiry'::batch_status;
   else
     return 'valid'::batch_status;
@@ -142,7 +142,11 @@ from public.product_batches b
 join public.products p on p.id = b.product_id
 order by b.expiry_date asc;
 
--- Expiring within 30 / 14 / 3 days (reusable)
+-- Expiring within 90 / 30 / 14 / 3 days (reusable)
+create or replace view public.v_expiring_90d as
+select * from public.v_batches_priority
+where expiry_date between current_date and current_date + interval '90 days'
+and status != 'expired';
 create or replace view public.v_expiring_30d as
 select * from public.v_batches_priority
 where expiry_date between current_date and current_date + interval '30 days'

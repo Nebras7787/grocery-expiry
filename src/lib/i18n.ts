@@ -75,7 +75,6 @@ export const UI = {
   tagline: 'تابع تواريخ الصلاحية حتى بدون إنترنت',
   online: 'متصل',
   offline: 'غير متصل',
-  offlineMode: 'وضع عدم الاتصال',
   queued: 'في الانتظار',
   sync: 'مزامنة',
   syncNow: 'مزامنة الآن',

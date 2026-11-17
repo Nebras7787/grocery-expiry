@@ -4,26 +4,32 @@ import { useAuth } from '@/lib/auth-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Package, LogIn, UserPlus, WifiOff } from 'lucide-react';
-import { DemoDataCard } from '@/components/demo/DemoDataCard';
+import { Package, LogIn, UserPlus } from 'lucide-react';
 
 export default function LoginPage() {
-  const { signIn, signUp, continueOffline } = useAuth();
-  const [email, setEmail] = useState('');
+  const { signIn, signUp } = useAuth();
+  const [email, setEmail] = useState(() => {
+    if (typeof window === 'undefined') return '';
+    return localStorage.getItem('lastLoginEmail') ?? '';
+  });
   const [password, setPassword] = useState('');
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setNotice('');
     setSaving(true);
     try {
-      const result = mode === 'login'
-        ? await signIn(email, password)
-        : await signUp(email, password);
+      const result = mode === 'login' ? await signIn(email, password) : await signUp(email, password);
+      if (!result.error && typeof window !== 'undefined') {
+        localStorage.setItem('lastLoginEmail', email);
+      }
       if (result.error) setError(result.error);
+      if (result.notice) setNotice(result.notice);
     } finally {
       setSaving(false);
     }
@@ -78,6 +84,9 @@ export default function LoginPage() {
               {error && (
                 <div className="p-2.5 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>
               )}
+              {notice && (
+                <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-sm text-emerald-800">{notice}</div>
+              )}
 
               <Button type="submit" disabled={saving} className="w-full">
                 {saving ? 'يرجى الانتظار...' : mode === 'login' ? 'تسجيل الدخول' : 'إنشاء الحساب'}
@@ -85,31 +94,24 @@ export default function LoginPage() {
             </form>
 
             <div className="mt-3 text-center text-sm">
-              <button onClick={() => setMode(mode === 'login' ? 'register' : 'login')} className="text-emerald-600 hover:underline">
+              <button
+                type="button"
+                onClick={() => {
+                  setMode(mode === 'login' ? 'register' : 'login');
+                  setError('');
+                  setNotice('');
+                }}
+                className="text-emerald-600 hover:underline"
+              >
                 {mode === 'login' ? 'ليس لديك حساب؟ أنشئ حساباً' : 'لديك حساب بالفعل؟ سجّل الدخول'}
               </button>
             </div>
           </CardContent>
         </Card>
 
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-slate-200" />
-          </div>
-          <div className="relative flex justify-center text-xs">
-            <span className="bg-slate-50 px-2 text-slate-400">أو</span>
-          </div>
-        </div>
-
-        <Button variant="outline" onClick={continueOffline} className="w-full">
-          <WifiOff className="w-4 h-4 ms-2" />
-          المتابعة بدون حساب
-        </Button>
         <p className="text-xs text-slate-400 text-center">
-          تُحفظ البيانات محلياً في جهازك. للمزامنة مع السحابة سجّل الدخول من Supabase.
+          يُشترط تسجيل الدخول. بعد الدخول تُحفظ جلستك وتعمل البيانات محلياً حتى دون اتصال، وتُزامَن مع Supabase عند عودة الشبكة.
         </p>
-
-        {process.env.NODE_ENV !== 'production' && <DemoDataCard variant="box" />}
       </div>
     </div>
   );

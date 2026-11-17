@@ -1,28 +1,19 @@
 'use client';
 
 import { useAuth } from '@/lib/auth-context';
+import { isPublicPath } from '@/lib/routes';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
 
-const PUBLIC_PATHS = ['/login', '/register'];
-
-// next.config.mjs sets `trailingSlash: true`, so usePathname() returns
-// '/login/' rather than '/login'. Normalize before comparing, otherwise public
-// pages are treated as protected and AuthGuard renders null (blank page).
-function isPublicPath(pathname: string): boolean {
-  const normalized = pathname.replace(/\/+$/, '') || '/';
-  return PUBLIC_PATHS.includes(normalized);
-}
-
 export function AuthGuard({ children }: { children: ReactNode }) {
-  const { user, loading, isOfflineMode } = useAuth();
+  const { user, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const isPublic = isPublicPath(pathname);
   const [timedOut, setTimedOut] = useState(false);
 
-  // Safety net: if auth never settles, stop spinning and let the app render
-  // instead of showing a blank page forever.
+  // Safety net: if auth never settles, stop spinning instead of showing a blank
+  // page forever.
   useEffect(() => {
     if (!loading) {
       setTimedOut(false);
@@ -34,10 +25,16 @@ export function AuthGuard({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (loading) return;
-    if (!user && !isOfflineMode && !isPublic) {
+    // Signed in while sitting on the login page → go straight to the dashboard.
+    if (user && isPublic) {
+      router.replace('/');
+      return;
+    }
+    // No confirmed session (Supabase or local) → login is mandatory.
+    if (!user && !isPublic) {
       router.replace('/login');
     }
-  }, [loading, user, isOfflineMode, isPublic, router]);
+  }, [loading, user, isPublic, router]);
 
   if (loading && !timedOut) {
     return (
@@ -47,7 +44,7 @@ export function AuthGuard({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!user && !isOfflineMode && !isPublic) {
+  if (!user && !isPublic) {
     return null;
   }
 

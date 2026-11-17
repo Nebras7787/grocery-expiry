@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Database, Loader2, Trash2, Sparkles } from 'lucide-react';
-import { seedDemoData, clearLocalData } from '@/lib/seed';
+import { seedDemoData, clearAllLocalData } from '@/lib/seed';
 import { useAuth } from '@/lib/auth-context';
 
 type Props = {
@@ -34,8 +34,8 @@ export function DemoDataCard({ variant = 'empty' }: Props) {
     setBusy(true);
     setMsg('');
     try {
-      await clearLocalData(user?.id);
-      setMsg('تم حذف البيانات المحلية');
+      await clearAllLocalData();
+      setMsg('تم حذف جميع البيانات');
     } catch (e) {
       console.error(e);
       setMsg('تعذّر حذف البيانات');
@@ -60,8 +60,9 @@ export function DemoDataCard({ variant = 'empty' }: Props) {
               {busy ? <Loader2 className="w-4 h-4 ms-2 animate-spin" /> : <Database className="w-4 h-4 ms-2" />}
               تحميل البيانات التجريبية
             </Button>
-            <Button variant="ghost" size="sm" onClick={handleClear} disabled={busy} title="حذف كل البيانات المحلية">
-              <Trash2 className="w-4 h-4" />
+            <Button variant="destructive" size="sm" onClick={handleClear} disabled={busy} title="حذف جميع البيانات المحلية">
+              {busy ? <Loader2 className="w-4 h-4 ms-1 animate-spin" /> : <Trash2 className="w-4 h-4 ms-1" />}
+              حذف الكل
             </Button>
           </div>
           {msg && <p className="text-xs text-emerald-700">{msg}</p>}
@@ -77,13 +78,14 @@ export function DemoDataCard({ variant = 'empty' }: Props) {
           <Database className="w-4 h-4" /> بيانات تجريبية
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="flex-1" onClick={handleSeed} disabled={busy}>
-            {busy ? <Loader2 className="w-4 h-4 ms-1 animate-spin" /> : <Database className="w-4 h-4 ms-1" />}
-            تحميل عيّنة
-          </Button>
-          <Button variant="ghost" size="sm" onClick={handleClear} disabled={busy} title="حذف البيانات المحلية">
-            <Trash2 className="w-4 h-4" />
-          </Button>
+              <Button variant="outline" size="sm" className="flex-1" onClick={handleSeed} disabled={busy}>
+                {busy ? <Loader2 className="w-4 h-4 ms-1 animate-spin" /> : <Database className="w-4 h-4 ms-1" />}
+                تحميل عيّنة
+              </Button>
+              <Button variant="destructive" size="sm" onClick={handleClear} disabled={busy} title="حذف جميع البيانات المحلية">
+                {busy ? <Loader2 className="w-4 h-4 ms-1 animate-spin" /> : <Trash2 className="w-4 h-4 ms-1" />}
+                حذف الكل
+              </Button>
         </div>
         {msg && <p className="text-xs text-center text-emerald-700">{msg}</p>}
       </CardContent>

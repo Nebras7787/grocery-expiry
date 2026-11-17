@@ -6,7 +6,7 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
   size?: 'sm' | 'md' | 'lg' | 'icon';
 }
 
-export function Button({ className, variant = 'default', size = 'md', ...props }: ButtonProps) {
+export function Button({ className, variant = 'default', size = 'md', type = 'button', ...props }: ButtonProps) {
   const base = 'inline-flex items-center justify-center rounded-lg font-medium transition-colors focus-visible:outline-none disabled:opacity-50 disabled:pointer-events-none';
   const variants: Record<string, string> = {
     default: 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm',
@@ -20,5 +20,5 @@ export function Button({ className, variant = 'default', size = 'md', ...props }
     lg: 'h-11 px-8',
     icon: 'h-9 w-9',
   };
-  return <button className={cn(base, variants[variant], sizes[size], className)} {...props} />;
+  return <button type={type} className={cn(base, variants[variant], sizes[size], className)} {...props} />;
 }

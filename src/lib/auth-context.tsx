@@ -2,17 +2,21 @@
 
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { getSupabase } from './supabase';
+import { readLocalSession, writeLocalSession, snapshotToUser } from './session';
 import type { Session, User } from '@supabase/supabase-js';
+
+interface AuthResult {
+  error?: string;
+  notice?: string;
+}
 
 interface AuthState {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error?: string }>;
-  signUp: (email: string, password: string) => Promise<{ error?: string }>;
+  signIn: (email: string, password: string) => Promise<AuthResult>;
+  signUp: (email: string, password: string) => Promise<AuthResult>;
   signOut: () => Promise<void>;
-  continueOffline: () => void;
-  isOfflineMode: boolean;
 }
 
 const AuthContext = createContext<AuthState>({
@@ -22,8 +26,6 @@ const AuthContext = createContext<AuthState>({
   signIn: async () => ({}),
   signUp: async () => ({}),
   signOut: async () => {},
-  continueOffline: () => {},
-  isOfflineMode: false,
 });
 
 export function useAuth() {
@@ -32,76 +34,109 @@ export function useAuth() {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
+  // Offline fallback restored from localStorage. It is only cleared by an
+  // explicit sign-out, so a failed token refresh while offline never kicks the
+  // user out of the app.
+  const [localUser, setLocalUser] = useState<User | null>(() => {
+    const snap = readLocalSession();
+    return snap ? snapshotToUser(snap) : null;
+  });
   const [loading, setLoading] = useState(true);
-  const [isOfflineMode, setIsOfflineMode] = useState(false);
 
   useEffect(() => {
     const supabase = getSupabase();
     if (!supabase) {
+      // No backend configured: there is nothing to authenticate against.
       setLoading(false);
-      setIsOfflineMode(true);
       return;
     }
+
     supabase.auth
       .getSession()
       .then(({ data: { session: s } }) => {
+        if (s?.user) {
+          writeLocalSession(s.user);
+          setLocalUser(s.user);
+        }
         setSession(s);
         setLoading(false);
       })
       .catch((err) => {
-        // Never leave `loading` stuck true: a rejected getSession (offline,
-        // blocked storage, corrupted token) would blank the whole app behind
-        // AuthGuard's spinner with nothing visible in the console.
-        console.warn('[Auth] getSession failed, continuing offline:', err);
-        setIsOfflineMode(true);
+        // Offline / blocked storage / corrupted token. Keep the persisted local
+        // session so the dashboard stays reachable without a network.
+        console.warn('[Auth] getSession failed, using local session:', err);
         setLoading(false);
       });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, s) => {
+      if (s?.user) {
+        writeLocalSession(s.user);
+        setLocalUser(s.user);
+      } else if (event === 'SIGNED_OUT' && typeof navigator !== 'undefined' && navigator.onLine) {
+        // A confirmed server-side sign-out while online: drop the local fallback
+        // too. Offline we keep it so the app stays usable without a network.
+        writeLocalSession(null);
+        setLocalUser(null);
+      }
       setSession(s);
       setLoading(false);
     });
+
     return () => subscription.unsubscribe();
   }, []);
 
-  const signIn = useCallback(async (email: string, password: string) => {
+  const signIn = useCallback(async (email: string, password: string): Promise<AuthResult> => {
     const supabase = getSupabase();
-    if (!supabase) return { error: 'Supabase not configured' };
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (!supabase) return { error: 'Supabase غير مُهيّأ — تحقّق من إعدادات الاتصال' };
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { error: error.message };
+    if (data.user) {
+      writeLocalSession(data.user);
+      setLocalUser(data.user);
+    }
     return {};
   }, []);
 
-  const signUp = useCallback(async (email: string, password: string) => {
+  const signUp = useCallback(async (email: string, password: string): Promise<AuthResult> => {
     const supabase = getSupabase();
-    if (!supabase) return { error: 'Supabase not configured' };
-    const { error } = await supabase.auth.signUp({ email, password });
+    if (!supabase) return { error: 'Supabase غير مُهيّأ — تحقّق من إعدادات الاتصال' };
+    const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) return { error: error.message };
-    return {};
+    if (data.session?.user) {
+      writeLocalSession(data.session.user);
+      setLocalUser(data.session.user);
+      return {};
+    }
+    // Email confirmation is enabled on this project, so no session yet.
+    return { notice: 'تم إنشاء الحساب — أكّد بريدك الإلكتروني ثم سجّل الدخول.' };
   }, []);
 
   const signOut = useCallback(async () => {
     const supabase = getSupabase();
-    if (supabase) await supabase.auth.signOut();
+    const offline = typeof navigator !== 'undefined' && !navigator.onLine;
+    try {
+      // Offline, scope 'local' still clears the stored token so reopening the
+      // app does not silently sign the user back in.
+      if (supabase) await supabase.auth.signOut(offline ? { scope: 'local' } : undefined);
+    } catch (e) {
+      console.warn('[Auth] signOut failed, clearing locally:', e);
+    }
+    writeLocalSession(null);
     setSession(null);
-    setIsOfflineMode(false);
-  }, []);
-
-  const continueOffline = useCallback(() => {
-    setIsOfflineMode(true);
-    setLoading(false);
+    setLocalUser(null);
   }, []);
 
   return (
     <AuthContext.Provider
       value={{
-        user: session?.user ?? null,
+        user: session?.user ?? localUser,
         session,
         loading,
         signIn,
         signUp,
         signOut,
-        continueOffline,
-        isOfflineMode,
       }}
     >
       {children}

@@ -181,3 +181,23 @@ export async function clearLocalData(userId?: string | null): Promise<void> {
     await db.syncQueue.where('owner').equals(owner).delete();
   });
 }
+
+// "Delete everything" must not care which account scope the rows were written
+// under (demo rows live under __offline__, real ones under a user id). Wiping the
+// tables outright avoids the case where the card deletes a scope that is empty
+// and the data appears to survive.
+export async function clearAllLocalData(): Promise<void> {
+  const db = getDB();
+  await db.transaction('rw', db.products, db.batches, db.syncQueue, async () => {
+    await db.products.clear();
+    await db.batches.clear();
+    await db.syncQueue.clear();
+  });
+  // Remove any OS-level expiry alarms that belonged to the deleted batches.
+  try {
+    const { cancelAllExpiryNotifications } = await import('./notifications');
+    await cancelAllExpiryNotifications();
+  } catch {
+    /* notifications unavailable (e.g. plain web) */
+  }
+}
